@@ -1,68 +1,53 @@
-import React, { useEffect, useState, useRef } from "react";
-
 import * as esbuild from "esbuild-wasm";
+import { useState, useEffect, useRef } from "react";
+
 import { unpkgPathPlugin } from "./plugins/unpkg-path-plugin";
+import { fetchPlugin } from "./plugins/fetch-plugin";
 
 function App() {
+  const ref = useRef<any>();
   const [input, setInput] = useState("");
   const [code, setCode] = useState("");
 
-  const ref = useRef<any>();
-
-  function handleChange(ev: React.ChangeEvent<HTMLTextAreaElement>) {
-    ev.preventDefault();
-
-    setInput(ev.target.value);
-  }
-
-  async function handleSubmit(ev: React.FormEvent<HTMLFormElement>) {
-    ev.preventDefault();
-
-    if (!ref.current) {
-      return;
-    }
-
-    const transformResult = await ref.current.build({
-      entryPoints: ["index.js"],
-      bundle: true,
-      write: false,
-      plugins: [unpkgPathPlugin()],
+  const startService = async () => {
+    ref.current = await esbuild.startService({
+      worker: true,
+      wasmURL: "https://unpkg.com/esbuild-wasm@0.8.27/esbuild.wasm",
     });
-
-    console.log(transformResult);
-
-    setCode(transformResult.outputFiles[0].text);
-  }
-
+  };
   useEffect(() => {
     startService();
   }, []);
 
-  async function startService() {
-    ref.current = await esbuild.startService({
-      worker: true,
-      wasmURL: "/esbuild.wasm",
+  const onClick = async () => {
+    if (!ref.current) {
+      return;
+    }
+
+    const result = await ref.current.build({
+      entryPoints: ["index.js"],
+      bundle: true,
+      write: false,
+      plugins: [unpkgPathPlugin(), fetchPlugin(input)],
+      define: {
+        "process.env.NODE_ENV": '"production"',
+        global: "window",
+      },
     });
-  }
+
+    setCode(result.outputFiles[0].text);
+  };
 
   return (
     <div>
-      <form onSubmit={handleSubmit}>
-        <textarea
-          name="code"
-          id="code"
-          value={input}
-          onChange={handleChange}
-          cols={80}
-          rows={10}
-        ></textarea>
-        <div>
-          <button type="submit">Submit</button>
-        </div>
-      </form>
-      <pre>
-        <code>{code}</code>
-      </pre>
+      <textarea
+        value={input}
+        onChange={(e) => setInput(e.target.value)}
+      ></textarea>
+      <div>
+        <button onClick={onClick}>Submit</button>
+      </div>
+      <pre>{code}</pre>
     </div>
   );
 }
